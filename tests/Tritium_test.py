@@ -5,12 +5,14 @@ Date: Apr 1 2018
 '''
 
 import unittest
+import numpy as np
+
 
 from morpho.utilities import morphologging
 logger = morphologging.getLogger(__name__)
 
 class TritiumTests(unittest.TestCase):
-    
+
     def test_KuriePlot(self):
         from mermithid.processors.TritiumSpectrum import TritiumSpectrumGenerator
         from mermithid.processors.plots import KuriePlotGeneratorProcessor
@@ -24,8 +26,9 @@ class TritiumTests(unittest.TestCase):
             "neutrino_mass" :0, # [eV]
             "energy_window": [tritium_endpoint()-1e3,tritium_endpoint()+1e3], # [KEmin,KEmax]
             # "energy_window": [0.,tritium_endpoint()+1e3], # [KEmin,KEmax]
-            "background": 1e-6, # [counts/eV/s]
-            "energy_resolution": 5# [eV]
+            "background": 10e-6, # [counts/eV/s]
+            #"energy_resolution": 5,# [eV]
+            "efficiency_coefficients": [1, 1e-1, 1e-3, 1e-3]
         }
         histo_plot = {
             "data": "KE",
@@ -52,6 +55,13 @@ class TritiumTests(unittest.TestCase):
         kurieHisto.data = result
         histo.Run()
         kurieHisto.Run()
+
+
+        n, bins = np.histogram(result['KE'], bins=10)
+        print('bin',bins)
+        print('n',n)
+        print('total counts', np.sum(n))
+        print('max KE', np.max(bins))
 
 if __name__ == '__main__':
     unittest.main()

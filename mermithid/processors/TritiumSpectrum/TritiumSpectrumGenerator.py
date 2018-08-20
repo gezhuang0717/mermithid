@@ -8,7 +8,7 @@ logger = morphologging.getLogger(__name__)
 from morpho.processors import BaseProcessor
 from mermithid.misc import Constants
 
-
+from morpho.processors.plots import RootCanvas, RootHistogram
 increase_range = 10.  # energy increase required for the convolution product to work
 
 
@@ -42,6 +42,7 @@ class TritiumSpectrumGenerator(BaseProcessor):
         self.energy_resolution = reader.read_param(
             config_dict, "energy_resolution", 0)
         self.numberDecays = reader.read_param(config_dict, "number_decays", -1)
+        self.efficiency_coefficients = reader.read_param(config_dict, "efficiency_coefficients", [0])
         return True
 
     def _GetNEvents_Window(self, KE, spectrum):
@@ -100,9 +101,18 @@ class TritiumSpectrumGenerator(BaseProcessor):
             self.increase_range = 0
             self.doSmearing = False
 
+        if hasattr(self, "efficiency_coefficients") and len(self.efficiency_coefficients)>1:
+            logger.debug("Will multiply pdf with efficiency")
+            self.doMultiplication = True
+            logger.debug(self.efficiency_coefficients)
+        else:
+            self.doMultiplication = False
+
         # We have to define the range here: the setRange() methods are only useful for the calculating integrals
         # The energy window is increased to accommodate the convolution
         KE = ROOT.RooRealVar("KE", "KE", self.KEmin -
+                             self.increase_range, self.KEmax+self.increase_range)
+        KE1 = ROOT.RooRealVar("KE1", "KE1", self.KEmin -
                              self.increase_range, self.KEmax+self.increase_range)
         # logger.debug(self.KEmin-self.increase_range,self.KEmax+self.increase_range)
         # KE.setRange("FullRange",0,Constants.tritium_endpoint()*2)
@@ -118,7 +128,7 @@ class TritiumSpectrumGenerator(BaseProcessor):
         spectrum = ROOT.RealTritiumSpectrum(
             "spectrum", "spectrum", KE, endpoint, m_nu)
 
-        # Define PdfFactory to add background and smearing
+        # Define PdfFactory to add background, smearing and efficiency multiplication
         pdffactory = ROOT.PdfFactory("myPdfFactory")
         # Smearing of the spectrum
         if self.doSmearing:
@@ -128,6 +138,7 @@ class TritiumSpectrumGenerator(BaseProcessor):
             # KE.setBins(100000, "cache")
             smearedspectrum = pdffactory.GetSmearedPdf(ROOT.RealTritiumSpectrum)(
                 "smearedspectrum", 2, KE, spectrum, meanSmearing, widthSmearing, 100000)
+
 
         # Background
         background = ROOT.RooUniform(
@@ -169,18 +180,80 @@ class TritiumSpectrumGenerator(BaseProcessor):
             "NEvents", "NEvents", self.number_decays_window_to_generate, 0., 10*self.number_decays_window_to_generate)
         NBkgd = ROOT.RooRealVar(
             "NBkgd", "NBkgd", self.number_bkgd_window_to_generate, 0., 10*self.number_bkgd_window_to_generate)
-        if self.doSmearing:
-            totalSpectrum = pdffactory.AddBackground(ROOT.RooAbsPdf)(
-                "totalSpectrum", KE, smearedspectrum, NEvents, NBkgd)
+
+        # Efficiency
+        if self.doMultiplication:
+            cname = "coeff0"
+            c0 = ROOT.RooRealVar(cname, cname, self.efficiency_coefficients[0])
+            #c1 = ROOT.RooRealVar("coeff1", "coeff1", 0., self.efficiency_coefficients[1])
+            polynomialCoefficients = ROOT.RooArgList(c0)
+            polynomialCoefficients.removeAll()
+            #polynomialCoefficients.add(KE)
+
+
+            #for i in range(1, polynomialEfficiencyOrder):
+            c = {}
+            for i in range(0, len(self.efficiency_coefficients)):
+                cname = "coeff{}".format(i)
+                c[i] = ROOT.RooRealVar(cname, cname, self.efficiency_coefficients[i])
+                c[i].Print()
+
+                polynomialCoefficients.add(c[i])
+            polyn = ROOT.RooPolynomial("abc", "abc", KE, polynomialCoefficients, int(0))
+            #polyn = ROOT.RooFormulaVar("f", "f","polynomial", polynomialCoefficients)
+
+            polynomialCoefficients.Print()
+
+        if self.doMultiplication:
+            if self.doSmearing:
+                trueSpectrum = pdffactory.AddBackground(ROOT.RooAbsPdf)(
+                    "trueSpectrum", KE, smearedspectrum, NEvents, NBkgd)
+            else:
+                trueSpectrum = pdffactory.AddBackground(ROOT.RooAbsPdf)(
+                    "trueSpectrum", KE, spectrum, NEvents, NBkgd)
+            totalSpectrum = pdffactory.MultiplyPolynomialEfficiency(ROOT.RooAbsPdf)(
+                "totalSpectrum", KE, trueSpectrum, polynomialCoefficients, int(0))
+            #totalSpectrum = ROOT.RooClassFactory.makePdf("totalSpectrum", "x", "trueSpectrum(x) * f(x)")
         else:
-            totalSpectrum = pdffactory.AddBackground(ROOT.RooAbsPdf)(
-                "totalSpectrum", KE, spectrum, NEvents, NBkgd)
+            if self.doSmearing:
+                totalSpectrum = pdffactory.AddBackground(ROOT.RooAbsPdf)(
+                    "totalSpectrum", KE, smearedspectrum, NEvents, NBkgd)
+            else:
+                totalSpectrum = pdffactory.AddBackground(ROOT.RooAbsPdf)(
+                    "totalSpectrum", KE, spectrum, NEvents, NBkgd)
+
 
         # Save things in a Workspace
         self.workspace = ROOT.RooWorkspace()
-        getattr(self.workspace, 'import')(totalSpectrum)
         getattr(self.workspace, 'import')(background)
+
+        #if self.doMultiplication:
+        #    getattr(self.workspace, 'import')(polyn)
+        #    getattr(self.workspace, 'import')(trueSpectrum)
+        #    self.workspace.factory("PROD::totalSpectrum(trueSpectrum, abc)")
+        #else:
+        getattr(self.workspace, 'import')(totalSpectrum)
+
         self.workspace.Print()
+
+        self.canvas = ROOT.TCanvas('a','a',600,400)
+        self.canvas.Divide(2,1);
+        xframe = ROOT.RooPlot(KE, self.KEmin, self. KEmax, 100)
+        yframe = ROOT.RooPlot(KE, self.KEmin, self. KEmax, 100)
+
+        self.canvas.cd(1)
+
+        #data = ROOT.RooDataSet(totalSpectrum.generate(ROOT.RooArgSet(KE),1000))
+        #totalSpectrum.fitTo(data)
+        totalSpectrum.plotOn(xframe)
+        #data.plotOn(xframe)
+        xframe.Draw()
+
+        self.canvas.cd(2)
+        polyn.plotOn(yframe)
+        yframe.Draw()
+
+        self.canvas.SaveAs('a.pdf')
 
     def InternalRun(self):
         self._PrepareWorkspace()
@@ -192,12 +265,17 @@ class TritiumSpectrumGenerator(BaseProcessor):
         logger.debug("Generate data")
         KE = self.workspace.var("KE")
         KE.setRange("window", self.KEmin, self.KEmax)
+
+        #KE1 = self.workspace.var("KE1")
+        #KE1.setRange("window", self.KEmin, self.KEmax)
+
         background = self.workspace.pdf("background")
         totalSpectrum = self.workspace.pdf("totalSpectrum")
         totalEvents = self.number_decays_window_to_generate + \
             self.number_bkgd_window_to_generate
         dataLarge = totalSpectrum.generate(ROOT.RooArgSet(
             KE), totalEvents, ROOT.RooFit.Range("window"))
+        dataLarge.Print()
         data = dataLarge.reduce(ROOT.RooFit.CutRange("window"))
         dataList = []
         for i in range(data.numEntries()):
