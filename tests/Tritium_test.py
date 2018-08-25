@@ -28,7 +28,7 @@ class TritiumTests(unittest.TestCase):
             # "energy_window": [0.,tritium_endpoint()+1e3], # [KEmin,KEmax]
             "background": 10e-6, # [counts/eV/s]
             #"energy_resolution": 5,# [eV]
-            "efficiency_coefficients": [1, 1e-1, 1e-3, 1e-3]
+            "efficiency_coefficients": [1, -1./20000]
         }
         histo_plot = {
             "data": "KE",
