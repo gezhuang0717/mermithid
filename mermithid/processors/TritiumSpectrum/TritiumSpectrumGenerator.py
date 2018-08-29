@@ -17,6 +17,7 @@ class TritiumSpectrumGenerator(BaseProcessor):
     Generate a smeared tritium spectrum.
     '''
 
+
     def InternalConfigure(self, config_dict={}):
         '''
         Required class attributes:
@@ -152,7 +153,41 @@ class TritiumSpectrumGenerator(BaseProcessor):
             smearedSpectrum = pdffactory.GetSmearedPdf(ROOT.RooAbsPdf)(
                 "smearedSpectrum", 2, KE, spectrum, meanSmearing, widthSmearing, 100000)
 
+        # Efficiency
+        if self.doMultiplication:
+            while len(self.efficiency_coefficients) < 5:
+                self.efficiency_coefficients.extend([0])
+            print(self.efficiency_coefficients)
 
+            cname = "coeff0"
+            c0 = ROOT.RooRealVar(cname, cname, self.efficiency_coefficients[0])
+            polynomialCoefficients = ROOT.RooArgList(c0)
+            polynomialCoefficients.removeAll() # this is ugly but I don't know what else to do
+            polynomialCoefficients.add(KE) # for RooFormulaVar
+            polynomialCoefficients.add(c0)
+
+            c = {}
+            for i in range(1, len(self.efficiency_coefficients)):
+                cname = "coeff{}".format(i)
+                c[i] = ROOT.RooRealVar(cname, cname, self.efficiency_coefficients[i])
+                c[i].Print()
+
+                polynomialCoefficients.add(c[i])
+
+            polyn = ROOT.RooFormulaVar("f", "f","@1+@2*TMath::Power(@0,1)+@3*TMath::Power(@0,2)+@4*TMath::Power(@0,3)+@5*TMath::Power(@0,4)",polynomialCoefficients)
+
+            # This should work but doesnt
+            if self.doSmearing:
+                multipliedSpectrum = pdffactory.MultiplyPolynom(ROOT.RooAbsPdf)(
+                        "ps", "multipliedSpectrum", polynomialCoefficients, smearedSpectrum)
+                #multipliedSpectrum = ROOT.RooEffProd("multipliedSpectrum", "multipliedSpectrum", smearedSpectrum, polyn)
+            else:
+                #multipliedSpectrum = pdffactory.MultiplyPolynom(ROOT.RooAbsPdf)(
+                #        "ps", "multipliedSpectrum", polynomialCoefficients, spectrum)
+                multipliedSpectrum = ROOT.RooEffProd("multipliedSpectrum", "multipliedSpectrum", spectrum, polyn)
+
+            print("Bye, bye")
+            multipliedSpectrum.Print()
 
         # Background
         if self.background_shape == 1:
@@ -172,6 +207,7 @@ class TritiumSpectrumGenerator(BaseProcessor):
                 c[i] = ROOT.RooRealVar(cname, cname, self.background_coefficients[i])
                 backgroundCoefficients.add(c[i])
             backgroundCoefficients.Print()
+
         else:
             backgroundCoefficients = ROOT.RooArgList()
 
@@ -212,50 +248,29 @@ class TritiumSpectrumGenerator(BaseProcessor):
         NBkgd = ROOT.RooRealVar(
             "NBkgd", "NBkgd", self.number_bkgd_window_to_generate)
 
-        if self.doSmearing:
-            backgroundSpectrum = pdffactory.AddBackground(ROOT.RooAbsPdf)(
-                    "backgroundSpectrum", self.background_shape, KE, smearedSpectrum, NEvents, NBkgd, backgroundCoefficients)
-        elif self.doMultiplication:
-            backgroundSpectrum = pdffactory.AddBackground(ROOT.RooAbsPdf)(
-                    "backgroundSpectrum", self.background_shape, KE, spectrum, NEvents, NBkgd, backgroundCoefficients)
+
+        if self.doMultiplication:
+            totalSpectrum = pdffactory.AddBackground(ROOT.RooAbsPdf)(
+                        "totalSpectrum", self.background_shape, KE, multipliedSpectrum, NEvents, NBkgd, backgroundCoefficients)
+        elif self.doSmearing:
+            totalSpectrum = pdffactory.AddBackground(ROOT.RooAbsPdf)(
+                    "totalSpectrum", self.background_shape, KE, smearedSpectrum, NEvents, NBkgd, backgroundCoefficients)
         else:
             totalSpectrum = pdffactory.AddBackground(ROOT.RooAbsPdf)(
                     "totalSpectrum", self.background_shape, KE, spectrum, NEvents, NBkgd, backgroundCoefficients)
 
-        # Efficiency
-        if self.doMultiplication:
-            while len(self.efficiency_coefficients) < 5:
-                self.efficiency_coefficients.extend([0])
-            print(self.efficiency_coefficients)
 
-            cname = "coeff0"
-            c0 = ROOT.RooRealVar(cname, cname, self.efficiency_coefficients[0])
-            polynomialCoefficients = ROOT.RooArgList(c0)
-            polynomialCoefficients.removeAll() # this is ugly but I don't know what else to do
-            polynomialCoefficients.add(KE) # for RooFormulaVar
-            polynomialCoefficients.add(c0)
-
-            c = {}
-            for i in range(1, len(self.efficiency_coefficients)):
-                cname = "coeff{}".format(i)
-                c[i] = ROOT.RooRealVar(cname, cname, self.efficiency_coefficients[i])
-                c[i].Print()
-
-                polynomialCoefficients.add(c[i])
-
-            polyn = ROOT.RooFormulaVar("f", "f","@1+@2*TMath::Power(@0,1)+@3*TMath::Power(@0,2)+@4*TMath::Power(@0,3)+@5*TMath::Power(@0,4)",polynomialCoefficients)
-            totalSpectrum = ROOT.RooEffProd("totalSpectrum", "totalSpectrum", backgroundSpectrum, polyn)
-
-            # This should work but doesnt
-            # totalSpectrum = pdffactory.MultiplyPolynom(ROOT.RooAbsPdf)(
-            #         "p", "totalSpectrum", polynomialCoefficients, backgroundSpectrum)"""
+        print("Hello! Good day!")
         totalSpectrum.Print()
+        print("Hello! Good day!")
 
         # Save things in a Workspace
         self.workspace = ROOT.RooWorkspace()
         getattr(self.workspace, 'import')(totalSpectrum)
 
+
         self.workspace.Print()
+        print("We got a total spectrum here")
 
         self.canvas = ROOT.TCanvas('a','a',2400,800)
         self.canvas.Divide(2,1);
@@ -267,14 +282,14 @@ class TritiumSpectrumGenerator(BaseProcessor):
         #data = ROOT.RooDataSet(totalSpectrum.generate(ROOT.RooArgSet(KE),1000))
         #totalSpectrum.fitTo(data)
         #self.workspace.pdf("totalSpectrum").plotOn(xframe)
-        totalSpectrum.plotOn(xframe)
+        spectrum.plotOn(xframe)
         #backgroundSpectrum.plotOn(xframe)
         #gaussian.Print()
         #data.plotOn(xframe)
         xframe.Draw()
 
         self.canvas.cd(2)
-        totalSpectrum.plotOn(yframe)
+        polyn.plotOn(yframe)
         yframe.Draw()
 
         self.canvas.SaveAs('a.pdf')
@@ -319,7 +334,7 @@ if __name__ == "__main__":
             "background": 10e-6, # [counts/eV/s]
             "background_shape_coefficients": [1, -1/20000],
             #"energy_resolution": 1,# [eV]
-            "efficiency_coefficients": [1]
+            "efficiency_coefficients": [1, 0]
         }
     proc = TritiumSpectrumGenerator("specGen")
     proc.Configure(specGen_config)
