@@ -201,12 +201,16 @@ class TritiumSpectrumGenerator(BaseProcessor):
             backgroundCoefficients.add(KE) # for RooFormulaVar
             backgroundCoefficients.add(c0)
 
+
             c = {}
             for i in range(1, len(self.background_coefficients)):
                 cname = "coeff{}".format(i)
                 c[i] = ROOT.RooRealVar(cname, cname, self.background_coefficients[i])
                 backgroundCoefficients.add(c[i])
             backgroundCoefficients.Print()
+
+            pb = ROOT.RooFormulaVar("pb", "pb","@1+@2*TMath::Power(@0,1)+@3*TMath::Power(@0,2)+@4*TMath::Power(@0,3)+@5*TMath::Power(@0,4)",backgroundCoefficients)
+
 
         else:
             backgroundCoefficients = ROOT.RooArgList()
@@ -249,20 +253,28 @@ class TritiumSpectrumGenerator(BaseProcessor):
             "NBkgd", "NBkgd", self.number_bkgd_window_to_generate)
 
 
-        if self.doMultiplication:
-            totalSpectrum = pdffactory.AddBackground(ROOT.RooAbsPdf)(
-                        "totalSpectrum", self.background_shape, KE, multipliedSpectrum, NEvents, NBkgd, backgroundCoefficients)
-        elif self.doSmearing:
-            totalSpectrum = pdffactory.AddBackground(ROOT.RooAbsPdf)(
-                    "totalSpectrum", self.background_shape, KE, smearedSpectrum, NEvents, NBkgd, backgroundCoefficients)
+        bkg = ROOT.RooUniform(
+                "bkg", "bkg", ROOT.RooArgSet(KE))
+        #if self.background_shape == 1:
+        if False:
+            bk1 = ROOT.RooEffProd("poly_background", "poly_background", bkg, pb);
+            totalSpectrum = ROOT.RooAddPdf("totalSpectrum", "totalSpectrum", ROOT.RooArgList(multipliedSpectrum, bk1), ROOT.RooArgList(NEvents, NBkgd))
         else:
-            totalSpectrum = pdffactory.AddBackground(ROOT.RooAbsPdf)(
-                    "totalSpectrum", self.background_shape, KE, spectrum, NEvents, NBkgd, backgroundCoefficients)
+            if self.doMultiplication:
+                totalSpectrum = pdffactory.AddBackground(ROOT.RooAbsPdf)(
+                            "totalSpectrum", self.background_shape, KE, multipliedSpectrum, NEvents, NBkgd, backgroundCoefficients)
+            elif self.doSmearing:
+                totalSpectrum = pdffactory.AddBackground(ROOT.RooAbsPdf)(
+                        "totalSpectrum", self.background_shape, KE, smearedSpectrum, NEvents, NBkgd, backgroundCoefficients)
+            else:
+                totalSpectrum = pdffactory.AddBackground(ROOT.RooAbsPdf)(
+                        "totalSpectrum", self.background_shape, KE, spectrum, NEvents, NBkgd, backgroundCoefficients)
 
 
         print("Hello! Good day!")
         totalSpectrum.Print()
         print("Hello! Good day!")
+        totalSpectrum.Print()
 
         # Save things in a Workspace
         self.workspace = ROOT.RooWorkspace()
