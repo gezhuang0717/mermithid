@@ -26,7 +26,8 @@ class TritiumTests(unittest.TestCase):
             "neutrino_mass" :0, # [eV]
             "energy_window": [tritium_endpoint()-1.3e3,tritium_endpoint()+0.4e3], # [KEmin,KEmax]
             # "energy_window": [0.,tritium_endpoint()+1e3], # [KEmin,KEmax]
-            "background": 10e-6, # [counts/eV/s]
+            "background": 100e-6, # [counts/eV/s]
+            "background_shape_coefficients": [0, 1/20000],
             #"energy_resolution": 5,# [eV]
             "efficiency_coefficients": [-1.66135862e+05, 3.66101578e+01, -3.02446439e-03, 1.11017923e-07, -1.52774133e-12]
             #"efficiency_coefficients": [1,0]
