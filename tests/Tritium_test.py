@@ -5,7 +5,7 @@ Date: Apr 1 2018
 '''
 
 import unittest
-import numpy as np
+import yaml
 
 
 from morpho.utilities import morphologging
@@ -22,11 +22,11 @@ class TritiumTests(unittest.TestCase):
         specGen_config = {
             "volume": 7e-6*1e-2, # [m3]
             "density": 3e17, # [1/m3]
-            "duration": 1.*seconds_per_year()/12., # [s]
+            "duration": 1.*seconds_per_year()/12/4., # [s]
             "neutrino_mass" :0, # [eV]
             "energy_window": [tritium_endpoint()-1.3e3,tritium_endpoint()+0.4e3], # [KEmin,KEmax]
             # "energy_window": [0.,tritium_endpoint()+1e3], # [KEmin,KEmax]
-            "background": 100e-6, # [counts/eV/s]
+            "background": 1e-6, # [counts/eV/s]
             "background_shape_coefficients": [0, 1/20000],
             #"energy_resolution": 5,# [eV]
             "efficiency_coefficients": [-1.66135862e+05, 3.66101578e+01, -3.02446439e-03, 1.11017923e-07, -1.52774133e-12]
@@ -58,12 +58,9 @@ class TritiumTests(unittest.TestCase):
         histo.Run()
         kurieHisto.Run()
 
+        with open('tritium_data.yaml', 'w') as outfile:
+            yaml.dump(result, outfile)
 
-        n, bins = np.histogram(result['KE'], bins=10)
-        print('bin',bins)
-        print('n',n)
-        print('total counts', np.sum(n))
-        print('max KE', np.max(bins))
 
 if __name__ == '__main__':
     unittest.main()
