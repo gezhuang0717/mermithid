@@ -67,13 +67,13 @@ class TritiumSpectrumLikelihoodSampler(RooFitLikelihoodSampler):
         var = wspace.var(self.varName)
 
         m_nu = ROOT.RooRealVar("m_nu", "m_nu", self.neutrinomass)
-        endpoint = ROOT.RooRealVar("endpoint", "endpoint", Constants.tritium_endpoint(),
-                                   Constants.tritium_endpoint()-10.,
-                                   Constants.tritium_endpoint()+10.)
+        endpoint = ROOT.RooRealVar("endpoint", "endpoint", Constants.tritium_endpoint())
+                                  # Constants.tritium_endpoint()-10.,
+                                  # Constants.tritium_endpoint()+10.)
 
 
         #eventRatio = ROOT.RooRealVar("TritiumRatio", "TritiumRatio", self.TritiumRatio, 0, 1)
-        NBkgd = ROOT.RooRealVar("NBkgd", "NBkgd", self.NBkgd, 0, self.NTotal)
+        NBkgd = ROOT.RooRealVar("NBkgd", "NBkgd", 1)
         NEvents = ROOT.RooRealVar("NEvents", "NEvents", self.NEvents, 0, self.NTotal)
 
 
